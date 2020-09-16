@@ -4,19 +4,22 @@
 //********************************
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Maynek.Command
 {
-    public enum CommandParserWarningType : int
+    public class OptionDefinition
     {
-        None = 0,
-        UndefinedOption = 1
-    }
+        public string[] Names { get; private set; }
+        public bool HasValue { get; set; } = false;
+        public OptionEventHandler EventHandler { get; set; }
 
-    public class CommandParserWarning
-    {
-        public CommandParserWarningType Type { get; set; } = CommandParserWarningType.None;
-        public string OptionName;
+        private OptionDefinition() { }
+
+        public OptionDefinition(params string[] names) : this()
+        {
+            this.Names = names;
+        }
     }
 
     /// <summary>
@@ -27,38 +30,59 @@ namespace Maynek.Command
         //================================
         // Definitions 
         //================================
-        public delegate void ArgumentMethod(string[] args);
-        public delegate void NoArgumentOptionMethod();
-        public delegate void OneArgumentOptionMethod(string arg);
-        public delegate void WarningMethod(CommandParserWarning warning);
-
-         //================================
-        // Constants
-        //================================
-        private const uint STATE_DEFAULT =  0x80000000;
-        private const uint STATE_NEUTRAL =  0x80000001;
-        private const uint STATE_FINISH  =  0x80000002;
-        private const uint STATE_MAX     =  STATE_DEFAULT - 1;
+        private const uint STATE_DEFAULT    = 0x80000000;
+        private const uint STATE_NEUTRAL    = 0x80000001;
+        private const uint STATE_SUCCESSFUL = 0x80000010;
+        private const uint STATE_FAIL       = 0x80000011;
+        private const uint STATE_MAX = STATE_DEFAULT - 1;
 
 
         //================================
         // Fields
         //================================
-        private uint stateCount = 0;
-        private uint currentState = STATE_DEFAULT;
-        private ArgumentMethod argumentMethod = null;
-        private Dictionary<uint, NoArgumentOptionMethod> noMethods =
-            new Dictionary<uint, NoArgumentOptionMethod>();
-        private Dictionary<uint, OneArgumentOptionMethod> oneMethods = 
-            new Dictionary<uint, OneArgumentOptionMethod>();
-        private Dictionary<string, uint> nextStates =
-            new Dictionary<string, uint>();
-        private WarningMethod warningMethod = null;
+        private uint stateCount;
+        private uint currentState;
+        private string currentOptionName;
+        private Dictionary<uint, OptionEventHandler> noArgOptionEvents;
+        private Dictionary<uint, OptionEventHandler> oneArgOptionEvents;
+        private Dictionary<string, uint> nextStates;
+
+        public ArgumentEventHandler ArgumentEvent;
+        public ErrorEventHandler ErrorEvent;
+        public WarningEventHandler WarningEvent;
+
+
+        //================================
+        // Properties
+        //================================
+        public bool Successful { get { return (this.currentState == STATE_SUCCESSFUL); } }
+
+
+        //================================
+        // Constructor
+        //================================
+        public Parser()
+        {
+            this.stateCount = 0;
+            this.currentState = STATE_DEFAULT;
+            this.currentOptionName = string.Empty;
+            this.noArgOptionEvents = new Dictionary<uint, OptionEventHandler>();
+            this.oneArgOptionEvents = new Dictionary<uint, OptionEventHandler>();
+            this.nextStates = new Dictionary<string, uint>();
+
+            this.ArgumentEvent = null;
+            this.WarningEvent = null;
+        }
 
 
         //================================
         // Methods
         //================================
+        private static bool isOptionName(string arg)
+        {
+            return (arg[0] == '-');
+        }
+
         private void updateStateCount()
         {
             this.stateCount++;
@@ -69,110 +93,99 @@ namespace Maynek.Command
             }
         }
 
-        private bool isOptionName(string arg)
-        {
-            return (arg[0] == '-');
-        }
-
         private void finishOption(string arg)
         {
-            if (this.noMethods.ContainsKey(this.currentState))
+            var optionArg = new OptionEventArgs();
+            optionArg.Name = this.currentOptionName;
+            optionArg.Value = arg;
+
+            if (this.noArgOptionEvents.ContainsKey(this.currentState))
             {
-                this.noMethods[this.currentState]();
+                this.noArgOptionEvents[this.currentState]?.Invoke(this, optionArg);
             }
-            
-            if (this.oneMethods.ContainsKey(this.currentState))
+
+            if (this.oneArgOptionEvents.ContainsKey(this.currentState))
             {
-                this.oneMethods[this.currentState](arg);
+                this.oneArgOptionEvents[this.currentState]?.Invoke(this, optionArg);
             }
 
             this.currentState = STATE_NEUTRAL;
+            this.currentOptionName = string.Empty;
         }
 
-        public void SetArgumentMethod(ArgumentMethod method)
+        public void AddOptionDefinition(OptionDefinition definition)
         {
-            this.argumentMethod = method;
-        }
-
-        public void SetWaringMethod(WarningMethod method)
-        {
-            this.warningMethod = method;
-        }
-
-        public void AddOptionMethod(NoArgumentOptionMethod method, string option)
-        {
-            if (this.isOptionName(option))
+            if (definition == null)
             {
+                throw new Exception("OptionDefinition is null.");
+            }
+
+            if (definition.EventHandler == null)
+            {
+                throw new Exception("OptionDefinition needs EventHandler.");
+            }
+
+            foreach (var name in definition.Names)
+            {
+                if (!Parser.isOptionName(name))
+                {
+                    throw new Exception("\"" + name + "\" is invalid option name.");
+                }
+
                 this.updateStateCount();
-                this.nextStates.Add(option, this.stateCount);
-                this.noMethods.Add(this.stateCount, method);
-            }
-            else
-            {
-                throw new Exception();
-            }
-        }
-
-        public void AddOptionMethod(NoArgumentOptionMethod method, string[] options)
-        {
-            foreach (string opt in options)
-            {
-                this.AddOptionMethod(method, opt);
-            }
-        }
-
-        public void AddOptionMethod(OneArgumentOptionMethod method, string option)
-        {
-            if (this.isOptionName(option))
-            {
-                this.updateStateCount();
-                this.nextStates.Add(option, this.stateCount);
-                this.oneMethods.Add(this.stateCount, method);
-            }
-            else
-            {
-                throw new Exception();
-            }
-        }
-
-        public void AddOptionMethod(OneArgumentOptionMethod method, string[] options)
-        {
-            foreach (string opt in options)
-            {
-                this.AddOptionMethod(method, opt);
+                if (definition.HasValue)
+                {
+                    this.nextStates.Add(name, this.stateCount);
+                    this.oneArgOptionEvents.Add(this.stateCount, definition.EventHandler);
+                }
+                else
+                {
+                    this.nextStates.Add(name, this.stateCount);
+                    this.noArgOptionEvents.Add(this.stateCount, definition.EventHandler);
+                }
             }
         }
 
         public void Parse(string[] args)
         {
-            List<string> argList = new List<string>();
+            ArgumentEventArgs commandArgs = new ArgumentEventArgs();
 
             this.currentState = STATE_NEUTRAL;
             foreach (string arg in args)
             {
-                if (this.isOptionName(arg))
+                if (Parser.isOptionName(arg))
                 {
                     if (this.currentState != STATE_NEUTRAL)
                     {
-                        this.finishOption(string.Empty);
-                    }
+                        if (this.ErrorEvent != null)
+                        {
+                            var e = new ErrorEventArgs();
+                            e.Type = ErrorType.NoValue;
+                            e.OptionName = this.currentOptionName;
+                            this.ErrorEvent.Invoke(this, e);
+                        }
+                        this.currentState = STATE_FAIL;
+                        return;
+                    }                    
 
                     if (this.nextStates.ContainsKey(arg))
                     {
                         this.currentState = this.nextStates[arg];
-                        if (this.noMethods.ContainsKey(this.currentState))
+                        this.currentOptionName = arg;
+
+                        if (this.noArgOptionEvents.ContainsKey(this.currentState))
                         {
                             this.finishOption(string.Empty);
                         }                        
                     }
                     else
                     {
-                        if (this.warningMethod != null)
+                        if (this.WarningEvent != null)
                         {
-                            CommandParserWarning warning = new CommandParserWarning();
-                            warning.Type = CommandParserWarningType.UndefinedOption;
+                            WarningEventArgs warning = new WarningEventArgs();
+                            warning.Type = WarningType.UndefinedOption;
                             warning.OptionName = arg;
-                            this.warningMethod(warning);
+                            this.WarningEvent(this, warning);
                         }
                     }
                 }
@@ -180,7 +193,7 @@ namespace Maynek.Command
                 {
                     if (this.currentState == STATE_NEUTRAL)
                     {
-                        argList.Add(arg);
+                        commandArgs.Add(arg);
                     }
                     else
                     {
@@ -189,12 +202,9 @@ namespace Maynek.Command
                 }
             }
 
-            if (this.argumentMethod != null)
-            {
-                this.argumentMethod(argList.ToArray());
-            }
+            this.ArgumentEvent?.Invoke(this, commandArgs);
 
-            this.currentState = STATE_FINISH;
+            this.currentState = STATE_SUCCESSFUL;
         }
     }
 }

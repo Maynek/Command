@@ -14,25 +14,53 @@ namespace Maynek.Command.Test
             //Parser setting.
             var parser = new Parser();
 
-            parser.SetArgumentMethod(delegate (string[] args)
+            parser.ArgumentEvent += delegate(object sender, ArgumentEventArgs e)
             {
-                for (int i = 0;  i < args.Length; i++)
+                for (int i = 0; i < e.Args.Length; i++)
                 {
-                    Writer.WriteInfo("  Argument[" + (i+1).ToString() + "] : " + args[i]);
+                    Writer.WriteInfo("  Argument[" + (i + 1).ToString() + "] : " + e.Args[i]);
+                }
+            };
+
+            parser.ErrorEvent += delegate (object sender, ErrorEventArgs e)
+            {
+                var s = "Parse Error : ";
+
+                switch(e.Type)
+                {
+                    case ErrorType.NoValue:
+                        s += "Option '" + e.OptionName + "' needs value.";
+                        break;
+                }
+
+                Writer.WriteInfo(s);
+            };
+
+            parser.AddOptionDefinition(new OptionDefinition("-s")
+            {
+                EventHandler = delegate(object sender, OptionEventArgs e)
+                {
+                    Writer.WriteInfo("  " + e.Name + " (No Value).");
                 }
             });
 
-            parser.AddOptionMethod(delegate () {
-                Writer.WriteInfo("  s : No Arg.");
-            }, "-s");
+            parser.AddOptionDefinition(new OptionDefinition("-a", "--a-longname")
+            {
+                EventHandler = delegate(object sender, OptionEventArgs e)
+                {
+                    Writer.WriteInfo("  " + e.Name + " (No Value).");
+                }
+            });
 
-            parser.AddOptionMethod(delegate () {
-                Writer.WriteInfo("  a : No Arg.");
-            }, new string[] { "-a", "--a-longname", "-za" });
+            parser.AddOptionDefinition(new OptionDefinition("-v")
+            {
+                HasValue = true,
+                EventHandler = delegate(object sender, OptionEventArgs e)
+                {
+                    Writer.WriteInfo("  " + e.Name + " : " + e.Value);
+                }
+            });
 
-            parser.AddOptionMethod(delegate (string arg) {
-                Writer.WriteInfo("  v : " + arg);
-            }, "-v");
 
             //Test.
             var testData = new string[]
@@ -43,6 +71,7 @@ namespace Maynek.Command.Test
                 "--a-longname srcpath destpath",
                 "-s",
                 "-v opt path",
+                "-v opt1 -v opt2",
                 "-v -s srcpath destpath"
             };
 
