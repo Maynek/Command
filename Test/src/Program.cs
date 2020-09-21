@@ -54,7 +54,7 @@ namespace Maynek.Command.Test
 
             parser.AddOptionDefinition(new OptionDefinition("-v")
             {
-                HasValue = true,
+                ValueType = ValueType.Require,
                 EventHandler = delegate(object sender, OptionEventArgs e)
                 {
                     Writer.WriteInfo("  " + e.Name + " : " + e.Value);
