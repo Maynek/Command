@@ -8,11 +8,11 @@ using System.Reflection;
 
 namespace Maynek.Command
 {
-    public enum ValueType : int
+    public enum OptionType : int
     {
-        None = 0,
-        Require = 1,
-        Settable = 2
+        NoValue = 0,
+        RequireValue = 1,
+        //SettableValue = 2
     }
 
     public enum ErrorType : int
@@ -64,7 +64,7 @@ namespace Maynek.Command
     public class OptionDefinition
     {
         public string[] Names { get; private set; }
-        public ValueType ValueType { get; set; } = ValueType.None;
+        public OptionType Type { get; set; } = OptionType.NoValue;
         public OptionEventHandler EventHandler { get; set; }
 
         private OptionDefinition() { }
@@ -186,7 +186,7 @@ namespace Maynek.Command
                 }
 
                 this.updateStateCount();
-                if (definition.ValueType == ValueType.Require)
+                if (definition.Type == OptionType.RequireValue)
                 {
                     this.nextStates.Add(name, this.stateCount);
                     this.oneArgOptionEvents.Add(this.stateCount, definition.EventHandler);
