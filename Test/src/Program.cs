@@ -7,9 +7,10 @@ namespace Maynek.Command.Test
     {
         static int Main(string[] args)
         {
-            Writer.DetailMode = true;
+            Writer writer = new Writer() { EnabledWrite = true };
 
-            Writer.WriteInfo("-------- Start test. -------- ");
+
+            writer.Write("-------- Start test. -------- ");
 
             //Parser setting.
             var parser = new Parser();
@@ -18,7 +19,7 @@ namespace Maynek.Command.Test
             {
                 for (int i = 0; i < e.Args.Length; i++)
                 {
-                    Writer.WriteInfo("  Argument[" + (i + 1).ToString() + "] : " + e.Args[i]);
+                    writer.Write("  Argument[" + (i + 1).ToString() + "] : " + e.Args[i]);
                 }
             };
 
@@ -33,14 +34,14 @@ namespace Maynek.Command.Test
                         break;
                 }
 
-                Writer.WriteInfo(s);
+                writer.Write(s);
             };
 
             parser.AddOptionDefinition(new OptionDefinition("-s")
             {
                 EventHandler = delegate(object sender, OptionEventArgs e)
                 {
-                    Writer.WriteInfo("  " + e.Name + " (No Value).");
+                    writer.Write("  " + e.Name + " (No Value).");
                 }
             });
 
@@ -48,7 +49,7 @@ namespace Maynek.Command.Test
             {
                 EventHandler = delegate(object sender, OptionEventArgs e)
                 {
-                    Writer.WriteInfo("  " + e.Name + " (No Value).");
+                    writer.Write("  " + e.Name + " (No Value).");
                 }
             });
 
@@ -57,7 +58,7 @@ namespace Maynek.Command.Test
                 Type = OptionType.RequireValue,
                 EventHandler = delegate(object sender, OptionEventArgs e)
                 {
-                    Writer.WriteInfo("  " + e.Name + " : " + e.Value);
+                    writer.Write("  " + e.Name + " : " + e.Value);
                 }
             });
 
@@ -77,15 +78,15 @@ namespace Maynek.Command.Test
 
             for (int i = 0; i < testData.Length; i++)
             {
-                Writer.WriteInfo("[Case" + (i+1).ToString() + "]");
-                Writer.WriteInfo("Input :");
-                Writer.WriteInfo("  " + testData[i]);
-                Writer.WriteInfo("Output :");
+                writer.Write("[Case" + (i+1).ToString() + "]");
+                writer.Write("Input :");
+                writer.Write("  " + testData[i]);
+                writer.Write("Output :");
                 parser.Parse(testData[i].Split(' '));
-                Writer.WriteInfo("");
+                writer.Write("");
             }
 
-            Writer.WriteInfo("-------- End test. --------");
+            writer.Write("-------- End test. --------");
 
             return 0;
         }

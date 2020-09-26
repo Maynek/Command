@@ -11,14 +11,27 @@ namespace Maynek.Command
     /// </summary>
     public class Writer
     {
-        public static bool DetailMode { get; set; } = false;
+        public bool EnabledWrite { get; set; } = false;
+        public bool EnabledDetail { get; set; } = false;
 
-        public static void WriteInfo(string value)
+        public void Write(string value)
         {
-            if (DetailMode)
+            if (this.EnabledWrite)
             {
                 Console.WriteLine(value);
             }
+        }
+
+        public void WriteDetail(string value)
+        {
+            if (this.EnabledDetail) this.Write(value);
+        }
+
+        public void WriteDebug(string value)
+        {
+#if DEBUG
+            if (this.EnabledDetail) this.Write(value);
+#endif
         }
     }
 }
